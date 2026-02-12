@@ -2,50 +2,89 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Kiraak Party - YouTube Sync</title>
+<title>Kiraak Party Pro 🎬</title>
 
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <style>
-body {
-    margin:0;
-    background:#0b0b0b;
-    color:white;
-    font-family:sans-serif;
-    display:flex;
-    flex-direction:column;
-    height:100vh;
+body{
+margin:0;
+background:#0b0b0b;
+color:white;
+font-family:sans-serif;
+display:flex;
+flex-direction:column;
+height:100vh;
+overflow:hidden;
 }
 
-#player { flex:1; }
+#player{ flex:1; }
 
-.controls {
-    background:#1a1a1a;
-    padding:20px;
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:15px;
+.controls{
+background:#1a1a1a;
+padding:15px;
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:15px;
 }
 
-input,button {
-    padding:10px;
-    border:none;
-    border-radius:5px;
+input,button{
+padding:10px;
+border:none;
+border-radius:5px;
 }
 
-button {
-    background:#e50914;
-    color:white;
-    cursor:pointer;
+button{
+background:#e50914;
+color:white;
+cursor:pointer;
 }
 
-#status-dot {
-    width:10px;
-    height:10px;
-    border-radius:50%;
-    display:inline-block;
-    background:red;
+#status-dot{
+width:10px;
+height:10px;
+border-radius:50%;
+display:inline-block;
+background:red;
+}
+
+.chat-box{
+height:120px;
+overflow-y:auto;
+background:#111;
+padding:10px;
+border-radius:5px;
+font-size:14px;
+}
+
+.message{
+margin-bottom:5px;
+}
+
+.emoji-rain{
+position:fixed;
+top:-50px;
+font-size:2rem;
+animation:fall linear forwards;
+pointer-events:none;
+z-index:999;
+}
+
+@keyframes fall{
+to{
+transform:translateY(110vh) rotate(360deg);
+}
+}
+
+.emoji-buttons{
+display:flex;
+gap:8px;
+margin-top:8px;
+}
+
+.emoji-buttons button{
+background:#333;
 }
 </style>
 </head>
@@ -57,13 +96,30 @@ button {
 
 <div>
 <div><span id="status-dot"></span> <b id="myid">Connecting...</b></div>
-<input id="videoInput" placeholder="Paste Full YouTube Link">
+
+<input id="nameInput" placeholder="Your Name">
+
+<input id="videoInput" placeholder="Paste YouTube Link">
 <button onclick="loadVideo()">Load Video</button>
+
+<div class="emoji-buttons">
+<button onclick="sendEmoji('😂')">😂</button>
+<button onclick="sendEmoji('❤️')">❤️</button>
+<button onclick="sendEmoji('😢')">😢</button>
+<button onclick="sendEmoji('🌚')">🌚</button>
+</div>
 </div>
 
 <div>
 <input id="friendID" placeholder="Friend ID">
 <button onclick="connectFriend()">Connect</button>
+
+<div class="chat-box" id="chatBox"></div>
+
+<div style="display:flex; gap:5px; margin-top:5px;">
+<input id="chatInput" placeholder="Type message..." style="flex:1;">
+<button onclick="sendMessage()">Send</button>
+</div>
 </div>
 
 </div>
@@ -72,92 +128,124 @@ button {
 let player;
 let peer = new Peer();
 let connection;
-let isRemote = false;
+let isRemote=false;
 
-function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
-        height: '100%',
-        width: '100%',
-        videoId: '',
-        events: {
-            'onStateChange': onPlayerStateChange
-        }
-    });
+function onYouTubeIframeAPIReady(){
+player=new YT.Player('player',{
+height:'100%',
+width:'100%',
+videoId:'',
+events:{'onStateChange':onPlayerStateChange}
+});
 }
 
-peer.on('open', id => {
-    document.getElementById('myid').innerText = "Your ID: " + id;
+peer.on('open',id=>{
+document.getElementById('myid').innerText="Your ID: "+id;
 });
 
-peer.on('connection', conn => {
-    connection = conn;
-    setupConn();
+peer.on('connection',conn=>{
+connection=conn;
+setupConn();
 });
 
 function connectFriend(){
-    let id = document.getElementById("friendID").value;
-    connection = peer.connect(id);
-    setupConn();
+let id=document.getElementById("friendID").value;
+connection=peer.connect(id);
+setupConn();
 }
 
 function setupConn(){
-    connection.on('open', ()=>{
-        document.getElementById("status-dot").style.background="lime";
-        alert("Connected ✅");
-    });
+connection.on('open',()=>{
+document.getElementById("status-dot").style.background="lime";
+});
 
-    connection.on('data', data=>{
-        if(data.type==="play"){
-            isRemote=true;
-            player.seekTo(data.time,true);
-            player.playVideo();
-        }
-        else if(data.type==="pause"){
-            isRemote=true;
-            player.seekTo(data.time,true);
-            player.pauseVideo();
-        }
-        else if(data.type==="load"){
-            player.loadVideoById(data.id);
-        }
-    });
+connection.on('data',data=>{
+if(data.type==="play"){
+isRemote=true;
+player.seekTo(data.time,true);
+player.playVideo();
+}
+else if(data.type==="pause"){
+isRemote=true;
+player.seekTo(data.time,true);
+player.pauseVideo();
+}
+else if(data.type==="load"){
+player.loadVideoById(data.id);
+}
+else if(data.type==="chat"){
+addMessage(data.name,data.text);
+}
+else if(data.type==="emoji"){
+showEmojiRain(data.emoji);
+}
+});
 }
 
 function extractVideoID(url){
-    let regExp = /^.*(youtu.be\/|v\/|watch\?v=|&v=)([^#&?]*).*/;
-    let match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+let reg=/^.*(youtu.be\/|v\/|watch\?v=|&v=)([^#&?]*).*/;
+let match=url.match(reg);
+return (match&&match[2].length===11)?match[2]:null;
 }
 
 function loadVideo(){
-    let input = document.getElementById("videoInput").value.trim();
-    let vidID = extractVideoID(input);
-
-    if(!vidID){
-        alert("Invalid YouTube link ❌");
-        return;
-    }
-
-    player.loadVideoById(vidID);
-
-    if(connection && connection.open){
-        connection.send({type:"load", id:vidID});
-    }
+let input=document.getElementById("videoInput").value.trim();
+let id=extractVideoID(input);
+if(!id){ alert("Invalid link"); return;}
+player.loadVideoById(id);
+if(connection&&connection.open){
+connection.send({type:"load",id:id});
+}
 }
 
-function onPlayerStateChange(event){
-    if(isRemote){ isRemote=false; return; }
+function onPlayerStateChange(e){
+if(isRemote){isRemote=false;return;}
+if(connection&&connection.open){
+let time=player.getCurrentTime();
+if(e.data==YT.PlayerState.PLAYING){
+connection.send({type:"play",time:time});
+}
+else if(e.data==YT.PlayerState.PAUSED){
+connection.send({type:"pause",time:time});
+}
+}
+}
 
-    if(connection && connection.open){
-        let time = player.getCurrentTime();
+function sendMessage(){
+let text=document.getElementById("chatInput").value;
+let name=document.getElementById("nameInput").value||"Guest";
+if(!text||!connection||!connection.open)return;
 
-        if(event.data==YT.PlayerState.PLAYING){
-            connection.send({type:"play", time:time});
-        }
-        else if(event.data==YT.PlayerState.PAUSED){
-            connection.send({type:"pause", time:time});
-        }
-    }
+connection.send({type:"chat",name:name,text:text});
+addMessage(name,text);
+document.getElementById("chatInput").value="";
+}
+
+function addMessage(name,text){
+let box=document.getElementById("chatBox");
+let div=document.createElement("div");
+div.className="message";
+div.innerHTML="<b>"+name+":</b> "+text;
+box.appendChild(div);
+box.scrollTop=box.scrollHeight;
+}
+
+function sendEmoji(emoji){
+if(!connection||!connection.open)return;
+showEmojiRain(emoji);
+connection.send({type:"emoji",emoji:emoji});
+}
+
+function showEmojiRain(emoji){
+for(let i=0;i<15;i++){
+let div=document.createElement("div");
+div.className="emoji-rain";
+div.innerText=emoji;
+div.style.left=Math.random()*100+"vw";
+div.style.animationDuration=(Math.random()*2+2)+"s";
+document.body.appendChild(div);
+setTimeout(()=>div.remove(),4000);
+}
 }
 </script>
 
